@@ -10,17 +10,22 @@ import com.nexora.bank.nexora_backend.repository.UserRepository;
 import com.nexora.bank.nexora_backend.security.JwtUtil;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
 import java.util.Optional;
-import java.util.Random;
 import java.security.SecureRandom;
 
 
 @Service
 public class UserService {
+
+    /** How long an issued one-time code stays valid. */
+    @Value("${app.otp.expirationMs}")
+    private long otpExpirationMs;
     
     @Autowired
     private final UserRepository userRepository;
@@ -84,8 +89,9 @@ public class UserService {
         
         User savedUser = userRepository.save(user);
 
-        // 4. Card Service
-        cardService.createCardForUser(savedUser.getName());
+        // 4. Card Service — issued against the user, not their name, so the
+        //    card has a real owner and can be authorized against later.
+        cardService.createCardForUser(savedUser);
 
         // 5. Setup Elite Account
         Account account = new Account();
@@ -97,9 +103,9 @@ public class UserService {
         accountRepository.save(account);
 
         // 6. OTP Handling
-        String otp = generateOtp(); 
-        savedUser.setOtp(otp);
-        userRepository.save(savedUser); 
+        String otp = generateOtp();
+        issueOtp(savedUser, otp);
+        userRepository.save(savedUser);
 
         // 7. Mail bhejein
         emailService.sendOtpEmail(savedUser.getEmail(), otp);
@@ -117,8 +123,8 @@ public class UserService {
 
  if (!user.getIsVerified()) {
     // 1. Naya OTP generate aur save karo
-    String newOtp = generateOtp(); 
-    user.setOtp(newOtp);
+    String newOtp = generateOtp();
+    issueOtp(user, newOtp);
     userRepository.save(user);
 
     // 2. Email bhej do (Aapka existing email service)
@@ -151,8 +157,8 @@ public class UserService {
         // 2. Generate 6-digit OTP using our service
         String otp = emailService.generateOtp();
         
-        // 3. Save OTP to database (Temporarily in User entity)
-        user.setOtp(otp);
+        // 3. Save OTP to database (Temporarily in User entity), with a lifetime
+        issueOtp(user, otp);
         userRepository.save(user);
         
         // 4. Send Email via EmailService
@@ -175,9 +181,15 @@ public ResponseEntity<?> verifyAndResetPassword(String email, String otp, String
     if (userOptional.isPresent()) {
         User user = userOptional.get();
 
+        // 0. A code that has lapsed is refused before it is even compared, so
+        //    an old code cannot be replayed indefinitely.
+        if (user.getOtp() != null && user.isOtpExpired()) {
+            return ResponseEntity.status(401).body("Security Frequency (OTP) has expired. Request a new one.");
+        }
+
         // 1. Check if OTP matches
         if (user.getOtp() != null && user.getOtp().equals(otp)) {
-            
+
             // 2. Update Password (Bhai, BCrypt use kar rahe ho toh encode lazmi karna)
             // user.setPassword(passwordEncoder.encode(newPassword)); 
             // Abhi ke liye direct set, baad mein security badhayenge
@@ -189,7 +201,8 @@ public ResponseEntity<?> verifyAndResetPassword(String email, String otp, String
         }
 
             // 3. Clear OTP after successful reset
-            user.setOtp(null); 
+            user.setOtp(null);
+            user.setOtpExpiresAt(null);
             userRepository.save(user);
 
             return ResponseEntity.ok("Vault access restored. Password updated successfully.");
@@ -202,9 +215,16 @@ public ResponseEntity<?> verifyAndResetPassword(String email, String otp, String
 }
 
     public String generateOtp() {
-        Random random = new Random();
+        // Same secure source as the account identifier above. The previous
+        // java.util.Random is seeded from the clock and is predictable.
         int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
+    }
+
+    /** Records a code together with the moment it stops being accepted. */
+    private void issueOtp(User user, String otp) {
+        user.setOtp(otp);
+        user.setOtpExpiresAt(Instant.now().plusMillis(otpExpirationMs));
     }
 
 

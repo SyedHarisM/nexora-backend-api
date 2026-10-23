@@ -31,3 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Runtime upload directory — user-supplied files must never be committed
+uploads/
+
+### Local environment files — real secrets live in the environment, not here
+.env
+.env.local
+*.env

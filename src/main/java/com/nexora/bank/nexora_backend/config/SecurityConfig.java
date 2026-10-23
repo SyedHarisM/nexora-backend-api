@@ -33,11 +33,15 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/accounts/lookup/**").permitAll()
                         .requestMatchers("/api/users/register", "/api/users/login" , "/uploads/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // Account lookup resolves a real holder's name from an account
+                        // number. Left public it is a name-disclosure oracle over the
+                        // whole user base, so it now falls under the account rule.
                         .requestMatchers("/api/accounts/**").hasRole("USER")
-                        .requestMatchers("/api/v1/cards/**").permitAll()
+                        // Card routes carry card data and are resolved from the caller's
+                        // own identity, so they can no longer be reached anonymously.
+                        .requestMatchers("/api/v1/cards/**").authenticated()
                         .requestMatchers("/api/users/forgot-password", "/api/users/reset-password").permitAll()
                         .anyRequest().authenticated()
                 )

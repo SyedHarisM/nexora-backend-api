@@ -30,6 +30,18 @@
 		<java.version>21</java.version>
 	</properties>
 	<dependencies>
+		<!--
+			In-memory database, test scope only. The access-control and
+			atomicity fixes in this change have to be verified by actually
+			calling the endpoints and moving money, and the existing test could
+			not run at all without a live MySQL instance. Nothing is added to
+			the runtime application.
+		-->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>

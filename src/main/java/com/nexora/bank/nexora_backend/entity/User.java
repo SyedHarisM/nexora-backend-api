@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.time.Instant;
+
 @Entity
 public class User {
 
@@ -43,6 +45,16 @@ public class User {
     @Column(name = "otp")
     private String otp;
 
+    /**
+     * When the current one-time code stops being accepted.
+     *
+     * Codes previously had no lifetime: one issued months ago stayed valid
+     * until something happened to replace it. A null value means no expiry was
+     * ever recorded and is treated as already expired.
+     */
+    @Column(name = "otp_expires_at")
+    private Instant otpExpiresAt;
+
     @Column(name = "is_verified")
     private Boolean isVerified = false;
 
@@ -76,6 +88,19 @@ public class User {
 
     public void setOtp(String otp) {
         this.otp = otp;
+    }
+
+    public Instant getOtpExpiresAt() {
+        return otpExpiresAt;
+    }
+
+    public void setOtpExpiresAt(Instant otpExpiresAt) {
+        this.otpExpiresAt = otpExpiresAt;
+    }
+
+    /** True when there is no live code, or the one on record has lapsed. */
+    public boolean isOtpExpired() {
+        return otpExpiresAt == null || otpExpiresAt.isBefore(Instant.now());
     }
 
     public Boolean getIsVerified() {

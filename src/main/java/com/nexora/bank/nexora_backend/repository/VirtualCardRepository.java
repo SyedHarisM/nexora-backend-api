@@ -7,5 +7,11 @@ import java.util.Optional;
 
 @Repository
 public interface VirtualCardRepository extends JpaRepository<VirtualCard, Long> {
-    Optional<VirtualCard> findByHolderName(String holderName);
+
+    /**
+     * Cards are addressed by their owning user, never by holder name. A name is
+     * not an identity — it is guessable and not unique — so looking a card up
+     * by one hands card data to anyone able to guess a name.
+     */
+    Optional<VirtualCard> findByUserId(Long userId);
 }
